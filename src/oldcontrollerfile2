@@ -1,0 +1,156 @@
+import { Controller, Get } from '@nestjs/common';
+import { TelegramService } from './app.service';
+const fetch = require( "node-fetch" );
+const { execSync } = require( "child_process" );
+const { log } = console;
+const TelegramBot = require( "node-telegram-bot-api" );
+const fs = require( "fs" );
+const convoheader = "First respond to the question placed in quotes and then append to your response two pipes followed by a summary of the interaction including all information an AI would need to remember to continue the conversation including the background. Your name is Andy and you are female. The other speaker is Amy, also female."
+const summary=fs.readFileSync('convo.txt','utf8');
+const GPT3Prompt = "\n" + summary;
+const map = {
+        "/help": help,
+        "/send_message": sendMessage,
+        "/join_chat": joinChat,
+        "/add_chat_member": addChatMember,
+        "/edit_chat_description": editChatDescription,
+        "/list_chat_user": listChatUser,
+        "/remove_member": removeMember,
+        "/get_chat": getChat,
+        "/get_invite_link": getInviteLink,
+        "/update_invite": updateInvite,
+        "/grocery": grocery
+};
+let bot;
+
+
+
+async function handleNLP( input:any )
+{
+        //fs.writeFileSync('convo.txt', convoheader);
+        let msg = input;
+        let { text } = msg;
+        log ( "summary", summary);
+        log ("GPT3Prompt", GPT3Prompt);
+        log( "msg", msg );
+        //let msgarray = JSON.parse(JSON.stringify(msg)).text;
+        //log ( msgarray )
+        //let textarray = msgarray[4];
+        //log ( "msgarray", textarray );
+        if ( map[text] ) return map[text]( msg );
+
+        // GPT-3 stuff
+        let headers = {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer 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"
+                
+        };
+        let body = JSON.stringify({
+                prompt: `${GPT3Prompt} "${text}"\n\n`,
+                max_tokens: 600,
+                model: "text-davinci-003",
+                temperature: 0.9
+        });
+        //log ( body );
+        let url = "https://api.openai.com/v1/completions";
+        let req = {
+                method: "POST",
+                headers: headers,
+                body: body
+        }
+        let resp = await fetch( url, req );
+        let aiReply = await resp.json();
+        /*text = aiReply.choices[0].text;*/
+        if (aiReply && aiReply.choices && aiReply.choices.length > 0 && aiReply.choices[0].text) {
+                } else {
+                text = "Sorry. I didn't understand that. Maybe try something else?";
+        };
+        text = text.replace( /^\n*/, "" );
+        //text = text.replace(/^\n*|\|\|.*$/g, "");
+        //let splitter = text.split('||');
+        //text = splitter[0];
+        //fs.appendFileSync('convo.txt', splitter[2]);
+        log( "aiReply", aiReply );
+        if ( map[text] )
+        {
+                map[text]( msg );
+        } else {
+                return bot.sendMessage( msg.chat.id, text );
+        }
+}
+function help( msg:any ) {
+        let message = "here are the available commands\n\n";
+        for( let p in map ) message += p + "\n";
+        return bot.sendMessage( msg.chat.id, message );
+}
+
+function grocery( msg:any ) {
+        return bot.sendMessage( msg.chat.id, "this is the grocery list" );
+}
+
+function sendMessage( msg:any ) {
+        return bot.sendMessage( msg.chat.id, "this sends messages" );
+}
+function joinChat( msg:any ) {
+        return bot.sendMessage( msg.chat.id, "this joins a chat" );
+}
+function addChatMember( msg:any ) {
+        return bot.sendMessage( msg.chat.id, "this adds a chat member" );
+}
+function editChatDescription( msg:any ) {
+        return bot.sendMessage( msg.chat.id, "this edits the chat's description" );
+}
+function listChatUser( msg:any ) {
+        return bot.sendMessage( msg.chat.id, "this lists the chat users" );
+}
+function removeMember( msg:any ) {
+        return bot.sendMessage( msg.chat.id, "this removes a member" );
+}
+function getChat( msg:any ) {
+        return bot.sendMessage( msg.chat.id, "this gets a chat" );
+}
+function getInviteLink( msg:any ) {
+        return bot.sendMessage( msg.chat.id, "this gets an invite link" );
+}
+function updateInvite( msg:any ) {
+        return bot.sendMessage( msg.chat.id, "this updates the invite" );
+}
+function defaultHTTPResponse() {
+        return '{ "message": "api is working" }\n'
+}
+function setupTelegram()
+{
+        bot = new TelegramBot(
+                "5867322560:AAHe44N_tloKzZhX7rMgKYYSHvwKF1rvNi4",
+                {polling:true}
+        );
+        bot.onText( /./, handleNLP );
+}
+function setupDiscord(){}
+function setupWhatsApp(){}
+
+@Controller() export class TelegramController {
+        constructor() {
+                setupTelegram();
+                setupDiscord();
+                setupWhatsApp();
+        }
+
+        // it might be nice to have some http support for these
+        // but it's not necessary
+
+        @Get() defaultHTTPResponse() {
+                defaultHTTPResponse();
+        }
+
+        // @Get("help") help() {}
+        // @Get("send_message") sendMessage() { }
+        // @Get("join_chat") joinChat() { }
+        // @Get("add_chat_member") addChatMember() { }
+        // @Get("edit_chat_description") editChatDescription() { }
+        // @Get("list_chat_user") listChatUser() { }
+        // @Get("remove_member") removeMember() { }
+        // @Get("get_chat") getChat() { }
+        // @Get("get_invite_link") getInviteLink() { }
+        // @Get("update_invite") updateInvite() { }
+}
